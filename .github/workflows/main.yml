@@ -5,6 +5,9 @@ on:
     branches: ["**"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,16 +24,24 @@ jobs:
 
       - name: Extract Murad AI project
         run: |
-          unzip -o murad-ai-project.zip -d extracted
+          test -f murad-ai-project.zip
+          mkdir -p extracted
+          unzip -q murad-ai-project.zip -d extracted
           ANDROID_DIR=$(find extracted -type f -path '*/android-native/settings.gradle.kts' -print -quit | xargs dirname)
+          if [ -z "$ANDROID_DIR" ]; then
+            echo "Android project not found"
+            exit 1
+          fi
           echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
 
       - name: Install Android SDK components
         run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
@@ -38,7 +49,8 @@ jobs:
           gradle-version: "8.9"
 
       - name: Build APK
-        run: gradle -p "$ANDROID_DIR" assembleDebug
+        run: |
+          gradle -p "$ANDROID_DIR" --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
